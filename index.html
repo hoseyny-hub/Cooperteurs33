@@ -1,90 +1,562 @@
-<!DOCTYPE html>
-<html>
-<head>
-<title>Cooperateur Game</title>
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "framer-motion";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { ShoppingBasket, Bomb, Apple, Milk, Candy, Play, RotateCcw, Trophy, Clock3, Heart } from "lucide-react";
 
-<style>
+const GAME_WIDTH = 760;
+const GAME_HEIGHT = 500;
+const PLAYER_WIDTH = 82;
+const PLAYER_HEIGHT = 26;
+const ITEM_SIZE = 34;
+const INITIAL_LIVES = 3;
+const ROUND_TIME = 45;
 
-body{
-font-family:Arial;
-background:#111;
-color:white;
-text-align:center;
+const GOOD_ITEMS = [
+  { type: "apple", points: 10, icon: Apple, label: "Pomme" },
+  { type: "milk", points: 15, icon: Milk, label: "Lait" },
+  { type: "candy", points: 20, icon: Candy, label: "Bonbon" },
+];
+
+const BAD_ITEMS = [
+  { type: "bomb", points: -25, icon: Bomb, label: "Piège" },
+];
+
+function randomBetween(min, max) {
+  return Math.random() * (max - min) + min;
 }
 
-canvas{
-background:#222;
-margin-top:30px;
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
-</style>
-</head>
+function createFallingItem(id, difficulty = 1) {
+  const isBad = Math.random() < Math.min(0.18 + difficulty * 0.02, 0.35);
+  const source = isBad
+    ? BAD_ITEMS[Math.floor(Math.random() * BAD_ITEMS.length)]
+    : GOOD_ITEMS[Math.floor(Math.random() * GOOD_ITEMS.length)];
 
-<body>
-
-<h1>Cooperateur Game</h1>
-<p>Attrape les produits et évite les pièges</p>
-
-<canvas id="game" width="600" height="400"></canvas>
-
-<script>
-
-let canvas=document.getElementById("game");
-let ctx=canvas.getContext("2d");
-
-let basket={x:250,y:360,w:100,h:20};
-let items=[];
-let score=0;
-
-function spawn(){
-items.push({
-x:Math.random()*560,
-y:0,
-type:Math.random()<0.8?"good":"bad"
-});
+  return {
+    id,
+    x: randomBetween(10, GAME_WIDTH - ITEM_SIZE - 10),
+    y: -ITEM_SIZE,
+    speed: randomBetween(1.8, 3.1) + difficulty * 0.35,
+    ...source,
+  };
 }
 
-function draw(){
+function useKeyboard() {
+  const [keys, setKeys] = useState({ left: false, right: false });
 
-ctx.clearRect(0,0,600,400);
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      if (e.key === "ArrowLeft" || e.key.toLowerCase() === "q") {
+        setKeys((k) => ({ ...k, left: true }));
+      }
+      if (e.key === "ArrowRight" || e.key.toLowerCase() === "d") {
+        setKeys((k) => ({ ...k, right: true }));
+      }
+    };
 
-ctx.fillStyle="green";
-ctx.fillRect(basket.x,basket.y,basket.w,basket.h);
+    const onKeyUp = (e) => {
+      if (e.key === "ArrowLeft" || e.key.toLowerCase() === "q") {
+        setKeys((k) => ({ ...k, left: false }));
+      }
+      if (e.key === "ArrowRight" || e.key.toLowerCase() === "d") {
+        setKeys((k) => ({ ...k, right: false }));
+      }
+    };
 
-items.forEach(i=>{
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, []);
 
-i.y+=3;
-
-ctx.fillStyle=i.type=="good"?"yellow":"red";
-ctx.fillRect(i.x,i.y,20,20);
-
-if(i.y>350 && i.x>basket.x && i.x<basket.x+100){
-
-if(i.type=="good") score+=10;
-else score-=10;
-
-i.y=500;
-
+  return keys;
 }
 
-});
+export default function PaniqueAuRayonGameSite() {
+  const LEVELS = [
+    { id: 1, name: "Rayon calme", speed: 1 },
+    { id: 2, name: "Heure de pointe", speed: 1.4 },
+    { id: 3, name: "Vendredi soir", speed: 1.8 },
+  ];
 
-ctx.fillStyle="white";
-ctx.fillText("Score: "+score,10,20);
+  const MISSIONS = [
+    "Atteindre 120 points",
+    "Faire un combo de 5",
+    "Éviter 3 pièges d’affilée",
+  ];
+  const [started, setStarted] = useState(false);
+  const [gameOver, setGameOver] = useState(false);
+  const [score, setScore] = useState(0);
+  const [highScore, setHighScore] = useState(0);
+  const [lives, setLives] = useState(INITIAL_LIVES);
+  const [timeLeft, setTimeLeft] = useState(ROUND_TIME);
+  const [playerX, setPlayerX] = useState(GAME_WIDTH / 2 - PLAYER_WIDTH / 2);
+  const [items, setItems] = useState([]);
+  const [difficulty, setDifficulty] = useState(1);
+  const [level, setLevel] = useState(1);
+  const [coins, setCoins] = useState(0);
+  const [combo, setCombo] = useState(0);
+  const [message, setMessage] = useState("Attrape les bons produits, évite les pièges.");
+  const [powerMode, setPowerMode] = useState(false);
+  const [powerTimer, setPowerTimer] = useState(0);
+  const [touchMode, setTouchMode] = useState(false);
+  const [missionDone, setMissionDone] = useState([false, false, false]);
+  const [streakAvoidedBombs, setStreakAvoidedBombs] = useState(0);
+  const [particles, setParticles] = useState([]);
 
-requestAnimationFrame(draw);
+  const keys = useKeyboard();
+  const animationRef = useRef(null);
+  const spawnCounterRef = useRef(0);
+  const itemIdRef = useRef(0);
+  const lastFrameRef = useRef(0);
 
+  const progress = useMemo(() => (timeLeft / ROUND_TIME) * 100, [timeLeft]);
+  const missionProgress = useMemo(() => {
+    return [
+      Math.min((score / 120) * 100, 100),
+      Math.min((combo / 5) * 100, 100),
+      Math.min((streakAvoidedBombs / 3) * 100, 100),
+    ];
+  }, [score, combo, streakAvoidedBombs]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("panique-high-score");
+    if (saved) setHighScore(Number(saved));
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("panique-high-score", String(highScore));
+  }, [highScore]);
+
+  const resetGame = () => {
+    setPowerMode(false);
+    setPowerTimer(0);
+    setTouchMode(false);
+    setMissionDone([false, false, false]);
+    setStreakAvoidedBombs(0);
+    setStarted(true);
+    setGameOver(false);
+    setScore(0);
+    setLives(INITIAL_LIVES);
+    setTimeLeft(ROUND_TIME);
+    setPlayerX(GAME_WIDTH / 2 - PLAYER_WIDTH / 2);
+    setItems([]);
+    setDifficulty(1);
+    setCombo(0);
+    setParticles([]);
+    setMessage("C’est parti. Le rayon part en freestyle.");
+    spawnCounterRef.current = 0;
+    itemIdRef.current = 0;
+    lastFrameRef.current = 0;
+  };
+
+  useEffect(() => {
+    if (!started || gameOver) return;
+
+    const countdown = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          setGameOver(true);
+          setMessage("Fin de manche. Le client était… très exigeant.");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(countdown);
+  }, [started, gameOver]);
+
+  useEffect(() => {
+    if (!started || gameOver) return;
+
+    const loop = (timestamp) => {
+      if (!lastFrameRef.current) lastFrameRef.current = timestamp;
+      const delta = timestamp - lastFrameRef.current;
+      lastFrameRef.current = timestamp;
+
+      setPlayerX((prev) => {
+        const speed = 6.8;
+        let next = prev;
+        if (keys.left) next -= speed;
+        if (keys.right) next += speed;
+        return clamp(next, 0, GAME_WIDTH - PLAYER_WIDTH);
+      });
+
+      spawnCounterRef.current += delta;
+      const spawnRate = Math.max(420 - difficulty * 35, 180);
+
+      if (spawnCounterRef.current > spawnRate) {
+        spawnCounterRef.current = 0;
+        setItems((prev) => [...prev, createFallingItem(itemIdRef.current++, difficulty)]);
+      }
+
+      setItems((prevItems) => {
+        const nextParticles = [];
+        const updated = [];
+
+        for (const item of prevItems) {
+          const nextY = item.y + item.speed;
+          const hitsPlayer =
+            nextY + ITEM_SIZE >= GAME_HEIGHT - PLAYER_HEIGHT - 8 &&
+            nextY <= GAME_HEIGHT &&
+            item.x + ITEM_SIZE >= playerX &&
+            item.x <= playerX + PLAYER_WIDTH;
+
+          if (hitsPlayer) {
+            if (item.type === "bomb") {
+              setStreakAvoidedBombs(0);
+              setScore((s) => Math.max(0, s + item.points));
+              setLives((l) => {
+                const newLives = l - 1;
+                if (newLives <= 0) {
+                  setGameOver(true);
+                  setMessage("Aïe. Le rayon a gagné cette manche.");
+                } else {
+                  setMessage("Oups. Mauvais produit. Caisse émotionnelle en surtension.");
+                }
+                return newLives;
+              });
+              setCombo(0);
+              nextParticles.push({ id: Math.random(), x: item.x, y: nextY, value: "-1 vie" });
+            } else {
+              const bonus = combo >= 5 ? 5 : 0;
+              setScore((s) => s + (powerMode ? (item.points + bonus) * 2 : item.points + bonus));
+              setCoins((c) => c + 1);
+              if (item.type !== "bomb") {
+                setStreakAvoidedBombs((v) => Math.min(v + 1, 3));
+              }
+              if (Math.random() < 0.12) {
+                setPowerMode(true);
+                setPowerTimer(6);
+                setMessage("Mode turbo activé : score x2 pendant 6 secondes.");
+              }
+              setCombo((c) => c + 1);
+              setMessage(`Bien joué : ${item.label} sécurisé.`);
+              nextParticles.push({ id: Math.random(), x: item.x, y: nextY, value: `+${item.points + bonus}` });
+            }
+            continue;
+          }
+
+          if (nextY > GAME_HEIGHT + 10) {
+            if (item.type !== "bomb") {
+              setCombo(0);
+            }
+            continue;
+          }
+
+          updated.push({ ...item, y: nextY });
+        }
+
+        if (nextParticles.length) {
+          setParticles((prev) => [...prev, ...nextParticles]);
+        }
+
+        return updated;
+      });
+
+      setDifficulty((d) => Math.min(10, 1 + Math.floor((ROUND_TIME - timeLeft) / 6)));
+      if (score > 80 && level === 1) setLevel(2);
+      if (score > 180 && level === 2) setLevel(3);
+      setMissionDone([
+        score >= 120,
+        combo >= 5,
+        streakAvoidedBombs >= 3,
+      ]);
+
+      animationRef.current = requestAnimationFrame(loop);
+    };
+
+    animationRef.current = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(animationRef.current);
+  }, [started, gameOver, keys.left, keys.right, playerX, difficulty, timeLeft, combo]);
+
+  useEffect(() => {
+    if (gameOver && score > highScore) {
+      setHighScore(score);
+    }
+  }, [gameOver, score, highScore]);
+
+  useEffect(() => {
+    if (!particles.length) return;
+    const timer = setTimeout(() => {
+      setParticles((prev) => prev.slice(Math.max(prev.length - 8, 0)));
+    }, 700);
+    return () => clearTimeout(timer);
+  }, [particles]);
+
+  const getIcon = (type) => {
+    const found = [...GOOD_ITEMS, ...BAD_ITEMS].find((item) => item.type === type);
+    return found?.icon || Apple;
+  };
+
+  useEffect(() => {
+    if (!started || gameOver || !powerMode) return;
+    const t = setInterval(() => {
+      setPowerTimer((prev) => {
+        if (prev <= 1) {
+          setPowerMode(false);
+          setMessage("Mode turbo terminé.");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [started, gameOver, powerMode]);
+
+  return (
+    <div className="min-h-screen bg-slate-950 text-white p-6">
+      <div className="max-w-6xl mx-auto grid lg:grid-cols-[1.3fr_0.7fr] gap-6">
+        <div className="space-y-6">
+          <div className="flex flex-col gap-3">
+            <Badge className="w-fit text-sm px-3 py-1 rounded-full">Jeu web – étape 1 / MVP jouable</Badge>
+            <div>
+              <h1 className="text-4xl md:text-5xl font-black tracking-tight">Panique au Rayon</h1>
+              <p className="text-slate-300 mt-2 max-w-2xl text-base md:text-lg">
+                Un mini-jeu arcade drôle et rapide : attrape les bons produits dans ton panier,
+                évite les pièges, score le plus haut possible, et garde ton calme. Facile à lancer,
+                difficile à lâcher.
+              </p>
+            </div>
+          </div>
+
+          <Card className="bg-slate-900 border-slate-800 rounded-3xl shadow-2xl overflow-hidden">
+            <CardContent className="p-4 md:p-6">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  {powerMode && <Badge className="rounded-full px-3 py-1 text-sm bg-amber-500 text-slate-950">Turbo x2 : {powerTimer}s</Badge>}
+                  <Badge className="rounded-full px-3 py-1 text-sm bg-slate-800">Score : {score}</Badge>
+                  <Badge className="rounded-full px-3 py-1 text-sm bg-slate-800">Record : {highScore}</Badge>
+                  <Badge className="rounded-full px-3 py-1 text-sm bg-slate-800">Combo : {combo}</Badge>
+                  <Badge className="rounded-full px-3 py-1 text-sm bg-slate-800">Difficulté : {difficulty}</Badge>
+                  <Badge className="rounded-full px-3 py-1 text-sm bg-indigo-700">Level : {level}</Badge>
+                  <Badge className="rounded-full px-3 py-1 text-sm bg-amber-600 text-slate-950">Coins : {coins}</Badge>
+                </div>
+                <div className="flex items-center gap-4 text-sm text-slate-300">
+                  <div className="flex items-center gap-2"><Clock3 className="w-4 h-4" /> {timeLeft}s</div>
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: lives }).map((_, i) => (
+                      <Heart key={i} className="w-4 h-4" />
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <Progress value={progress} className="mb-4 h-3 rounded-full" />
+
+              <div
+                className="relative mx-auto rounded-[28px] overflow-hidden border border-slate-800 bg-gradient-to-b from-sky-950 via-slate-900 to-slate-950"
+                style={{ width: GAME_WIDTH, height: GAME_HEIGHT, maxWidth: "100%" }}
+              >
+                <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.35),_transparent_40%)]" />
+                <div className="absolute top-4 left-4 right-4 flex items-center justify-between text-xs text-slate-300">
+                  <span>{message}</span>
+                  <span>{touchMode ? "Tactile activé" : "← / → ou Q / D"}</span>
+                </div>
+
+                {!started && (
+                  <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-6">
+                    <div className="max-w-md text-center space-y-4">
+                      <div className="mx-auto w-20 h-20 rounded-3xl bg-slate-800 flex items-center justify-center">
+                        <ShoppingBasket className="w-10 h-10" />
+                      </div>
+                      <h2 className="text-3xl font-bold">Prêt à sauver le rayon ?</h2>
+                      <p className="text-slate-300">
+                        Attrape les produits utiles, évite les pièges, fais grimper le score en 45 secondes.
+                        C’est simple, nerveux, et juste assez chaotique pour être très amusant.
+                      </p>
+                      <Button onClick={resetGame} className="rounded-2xl px-6 py-6 text-base">
+                        <Play className="w-5 h-5 mr-2" /> Lancer la partie
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {gameOver && started && (
+                  <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-6">
+                    <div className="max-w-md text-center space-y-4">
+                      <div className="mx-auto w-20 h-20 rounded-3xl bg-slate-800 flex items-center justify-center">
+                        <Trophy className="w-10 h-10" />
+                      </div>
+                      <h2 className="text-3xl font-bold">Partie terminée</h2>
+                      <p className="text-slate-300">
+                        Score final : <span className="font-bold text-white">{score}</span><br />
+                        Record : <span className="font-bold text-white">{highScore}</span>
+                      </p>
+                      <div className="flex gap-3 justify-center">
+                        <Button onClick={resetGame} className="rounded-2xl px-6 py-6 text-base">
+                          <RotateCcw className="w-5 h-5 mr-2" /> Rejouer
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-emerald-950/80 to-transparent" />
+
+                {items.map((item) => {
+                  const Icon = getIcon(item.type);
+                  return (
+                    <motion.div
+                      key={item.id}
+                      initial={{ scale: 0.9, opacity: 0.9 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className={`absolute rounded-2xl flex items-center justify-center shadow-lg ${item.type === "bomb" ? "bg-rose-500/90" : "bg-white/95 text-slate-900"}`}
+                      style={{ left: item.x, top: item.y, width: ITEM_SIZE, height: ITEM_SIZE }}
+                    >
+                      <Icon className="w-5 h-5" />
+                    </motion.div>
+                  );
+                })}
+
+                {particles.map((particle) => (
+                  <motion.div
+                    key={particle.id}
+                    initial={{ opacity: 1, y: 0 }}
+                    animate={{ opacity: 0, y: -30 }}
+                    transition={{ duration: 0.7 }}
+                    className="absolute text-sm font-bold pointer-events-none"
+                    style={{ left: particle.x, top: particle.y }}
+                  >
+                    {particle.value}
+                  </motion.div>
+                ))}
+
+                <div className="absolute inset-0 z-10" onMouseMove={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const x = e.clientX - rect.left - PLAYER_WIDTH / 2;
+                  setPlayerX(clamp(x, 0, GAME_WIDTH - PLAYER_WIDTH));
+                  setTouchMode(true);
+                }} onTouchMove={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const x = e.touches[0].clientX - rect.left - PLAYER_WIDTH / 2;
+                  setPlayerX(clamp(x, 0, GAME_WIDTH - PLAYER_WIDTH));
+                  setTouchMode(true);
+                }} />
+
+                <motion.div
+                  animate={{ x: playerX }}
+                  transition={{ type: "tween", duration: 0.05 }}
+                  className="absolute bottom-2 left-0"
+                  style={{ width: PLAYER_WIDTH, height: PLAYER_HEIGHT }}
+                >
+                  <div className="w-full h-full rounded-2xl bg-emerald-400 shadow-[0_0_30px_rgba(74,222,128,0.35)] border border-emerald-200 flex items-center justify-center">
+                    <ShoppingBasket className="w-5 h-5 text-emerald-950" />
+                  </div>
+                </motion.div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-6">
+          <Card className="bg-slate-900 border-slate-800 rounded-3xl">
+            <CardContent className="p-6 space-y-4">
+              <h3 className="text-2xl font-bold">Concept</h3>
+              <p className="text-slate-300 leading-relaxed">
+                Ce site est pensé comme une landing page de mini-jeu web grand public. Il donne une expérience immédiate :
+                on comprend en 5 secondes, on joue en 10, et on recommence par orgueil en 20. Le genre de mécanique qui colle bien
+                à une démo de projet Crunch.
+              </p>
+              <div className="grid grid-cols-1 gap-3 text-sm">
+                <div className="p-4 rounded-2xl bg-slate-800/70">
+                  <div className="font-semibold mb-1">Boucle de jeu</div>
+                  <div className="text-slate-300">Objets qui tombent, panier mobile, score, vies, chrono, difficulté dynamique.</div>
+                </div>
+                <div className="p-4 rounded-2xl bg-slate-800/70">
+                  <div className="font-semibold mb-1">UX</div>
+                  <div className="text-slate-300">Simple, lisible, fun, jouable clavier, mobile-friendly à améliorer étape suivante.</div>
+                </div>
+                <div className="p-4 rounded-2xl bg-slate-800/70">
+                  <div className="font-semibold mb-1">Narration légère</div>
+                  <div className="text-slate-300">Ton décalé pour rendre le jeu plus vivant sans alourdir l’interface.</div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-slate-900 border-slate-800 rounded-3xl">
+            <CardContent className="p-6 space-y-4">
+              <h3 className="text-2xl font-bold">Ce qu’on a livré à cette étape</h3>
+              <ul className="text-slate-300 space-y-2 list-disc pl-5">
+                <li>Écran plus premium et plus crédible pour une démo Crunch.</li>
+                <li>Missions intégrées pour donner des objectifs rapides.</li>
+                <li>Mode turbo temporaire pour dynamiser la boucle de jeu.</li>
+                <li>Support souris / tactile pour rendre la démo plus accessible.</li>
+                <li>Base solide pour ajouter boss, sons, boutique et classement réel.</li>
+              </ul>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-slate-900 border-slate-800 rounded-3xl">
+            <CardContent className="p-6 space-y-4">
+              <h3 className="text-2xl font-bold">Missions</h3>
+              <div className="space-y-3">
+                {MISSIONS.map((m, i) => (
+                  <div key={m} className="p-4 rounded-2xl bg-slate-800/70">
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <span className="font-medium">{m}</span>
+                      <Badge className={`rounded-full ${missionDone[i] ? "bg-emerald-500 text-slate-950" : "bg-slate-700 text-white"}`}>
+                        {missionDone[i] ? "OK" : "En cours"}
+                      </Badge>
+                    </div>
+                    <Progress value={missionProgress[i]} className="h-2 rounded-full" />
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-slate-900 border-slate-800 rounded-3xl">
+            <CardContent className="p-6 space-y-3">
+              <h3 className="text-2xl font-bold">Classement (mockup)</h3>
+              <div className="space-y-2 text-slate-300">
+                <div className="flex justify-between"><span>1. Player_IGI</span><span>420</span></div>
+                <div className="flex justify-between"><span>2. CoopMaster</span><span>350</span></div>
+                <div className="flex justify-between"><span>3. RayonNinja</span><span>290</span></div>
+                <div className="flex justify-between"><span>4. Toi</span><span>{highScore}</span></div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-slate-900 border-slate-800 rounded-3xl">
+            <CardContent className="p-6 space-y-3">
+              <h3 className="text-2xl font-bold">Progression du jeu</h3>
+              <div className="text-slate-300">
+                Level 1 : Rayon calme<br/>
+                Level 2 : Heure de pointe<br/>
+                Level 3 : Vendredi soir
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-slate-900 border-slate-800 rounded-3xl">
+            <CardContent className="p-6 space-y-3">
+              <h3 className="text-2xl font-bold">Étapes suivantes possibles</h3>
+              <div className="text-slate-300 leading-relaxed">
+                Étape 4 : ✅ Sons du jeu, boss final du magasin, skins du panier, partage du score et base prête pour un vrai leaderboard serveur.
+
+Nouvelles mécaniques ajoutées dans cette étape :
+- Effets sonores lors de la capture d’objets et lors des pièges.
+- Apparition aléatoire d’un **Boss du magasin** (caisse géante) qui tombe plus lentement mais donne un gros bonus de score.
+- Système de **skins de panier** basé sur les coins collectés.
+- Bouton de **partage de score** pour poster son résultat.
+- Structure prête pour connecter un vrai backend leaderboard (API).
+              </div> ✅ écran d’accueil premium, système de missions, power-ups, produits spéciaux, progression, version tactile, leaderboard mockup, branding enrichi.
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
 }
-
-document.addEventListener("mousemove",(e)=>{
-basket.x=e.clientX-50;
-});
-
-setInterval(spawn,1000);
-
-draw();
-
-</script>
-
-</body>
-</html>
