@@ -1,1026 +1,227 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
-import {
-  ShoppingBasket,
-  TriangleAlert,
-  Apple,
-  Milk,
-  Candy,
-  Play,
-  RotateCcw,
-  Trophy,
-  Clock3,
-  Heart,
-  Sparkles,
-  Star,
-  Target,
-  Coins,
-  ArrowLeft,
-  ArrowRight,
-  Zap,
-  Shield,
-  TimerReset,
-  CheckCircle2,
-} from "lucide-react";
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Coop Rush — Panique au Rayon</title>
 
-const GAME_WIDTH = 860;
-const GAME_HEIGHT = 560;
-const PLAYER_WIDTH = 112;
-const PLAYER_HEIGHT = 34;
-const ITEM_SIZE = 44;
-const INITIAL_LIVES = 4;
-const ROUND_TIME = 70;
-const PLAYER_SPEED = 8;
+<style>
 
-const ASSETS = {
-  coopLogo:
-    "https://ecotop.org/wp-content/uploads/2025/02/Coop.svg.png",
-  heroBg:
-    "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=1600&q=80",
-  aisleBg:
-    "https://images.unsplash.com/photo-1604719312566-8912e9c8a213?auto=format&fit=crop&w=1600&q=80",
-};
-
-const LEVELS = [
-  {
-    id: 1,
-    name: "Accueil magasin",
-    target: 100,
-    spawnMin: 620,
-    spawnMax: 760,
-    fallBonus: 0,
-    badChance: 0.12,
-    bossAt: 85,
-    accent: "from-blue-500 to-cyan-400",
-    mission: "Attraper 6 bons produits",
-    intro: "Échauffement. Rayon stable, clients encore civilisés.",
-  },
-  {
-    id: 2,
-    name: "Heure de pointe",
-    target: 240,
-    spawnMin: 460,
-    spawnMax: 620,
-    fallBonus: 0.8,
-    badChance: 0.2,
-    bossAt: 210,
-    accent: "from-orange-500 to-yellow-400",
-    mission: "Faire un combo de 8",
-    intro: "Le magasin se remplit. Ton panier entre en mode production.",
-  },
-  {
-    id: 3,
-    name: "Rush du vendredi",
-    target: 420,
-    spawnMin: 320,
-    spawnMax: 500,
-    fallBonus: 1.6,
-    badChance: 0.28,
-    bossAt: 360,
-    accent: "from-fuchsia-500 to-rose-400",
-    mission: "Survivre 20 secondes sans faute",
-    intro: "Là, on ne joue plus. On pilote une crise logistique.",
-  },
-  {
-    id: 4,
-    name: "Final caisse express",
-    target: 650,
-    spawnMin: 240,
-    spawnMax: 380,
-    fallBonus: 2.2,
-    badChance: 0.34,
-    bossAt: 560,
-    accent: "from-emerald-500 to-lime-400",
-    mission: "Battre le boss de caisse",
-    intro: "Dernier niveau. Le magasin te teste comme un entretien chez McKinsey, mais avec des yaourts.",
-  },
-];
-
-const GOOD_ITEMS = [
-  { type: "apple", points: 12, icon: Apple, label: "Pomme fraîche", color: "bg-red-50 text-red-600 border-red-200" },
-  { type: "milk", points: 16, icon: Milk, label: "Lait", color: "bg-sky-50 text-sky-600 border-sky-200" },
-  { type: "candy", points: 22, icon: Candy, label: "Snack", color: "bg-pink-50 text-pink-600 border-pink-200" },
-  { type: "gold", points: 30, icon: Star, label: "Produit star", color: "bg-yellow-50 text-yellow-600 border-yellow-200" },
-];
-
-const BAD_ITEMS = [
-  { type: "trap", points: -15, icon: TriangleAlert, label: "Erreur rayon", color: "bg-rose-100 text-rose-700 border-rose-300" },
-  { type: "fake", points: -25, icon: TimerReset, label: "Rupture surprise", color: "bg-orange-100 text-orange-700 border-orange-300" },
-];
-
-const POWERUPS = [
-  { type: "turbo", icon: Zap, label: "Turbo", color: "bg-amber-100 text-amber-700 border-amber-300" },
-  { type: "shield", icon: Shield, label: "Bouclier", color: "bg-emerald-100 text-emerald-700 border-emerald-300" },
-];
-
-function randomBetween(min, max) {
-  return Math.random() * (max - min) + min;
+body{
+    margin:0;
+    font-family:Arial, Helvetica, sans-serif;
+    background:#0f172a;
+    color:white;
+    text-align:center;
 }
 
-function randomInt(min, max) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
+h1{
+    margin-top:20px;
 }
 
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
+#game{
+    position:relative;
+    width:800px;
+    height:500px;
+    background:#111827;
+    margin:30px auto;
+    overflow:hidden;
+    border-radius:12px;
+    border:2px solid #334155;
 }
 
-function pick(list) {
-  return list[Math.floor(Math.random() * list.length)];
+#player{
+    position:absolute;
+    bottom:10px;
+    width:100px;
+    height:20px;
+    background:#22c55e;
+    border-radius:8px;
 }
 
-function createParticle(x, y, text, tone = "good") {
-  return {
-    id: `${Date.now()}-${Math.random()}`,
-    x,
-    y,
-    text,
-    tone,
-  };
+.item{
+    position:absolute;
+    width:35px;
+    height:35px;
+    border-radius:8px;
 }
 
-function createFallingItem(id, levelId) {
-  const level = LEVELS.find((l) => l.id === levelId) || LEVELS[0];
-
-  const powerRoll = Math.random();
-  if (powerRoll < 0.08) {
-    const source = pick(POWERUPS);
-    return {
-      id,
-      type: source.type,
-      family: "powerup",
-      label: source.label,
-      icon: source.icon,
-      color: source.color,
-      x: randomBetween(12, GAME_WIDTH - ITEM_SIZE - 12),
-      y: -ITEM_SIZE,
-      speed: randomBetween(2.4, 3.5) + level.fallBonus,
-      points: 0,
-      size: ITEM_SIZE,
-    };
-  }
-
-  const isBad = Math.random() < level.badChance;
-  const source = isBad ? pick(BAD_ITEMS) : pick(GOOD_ITEMS);
-  return {
-    id,
-    ...source,
-    family: isBad ? "bad" : "good",
-    x: randomBetween(12, GAME_WIDTH - ITEM_SIZE - 12),
-    y: -ITEM_SIZE,
-    speed: randomBetween(2.1, 4.2) + level.fallBonus,
-    size: ITEM_SIZE,
-  };
+.good{
+    background:#38bdf8;
 }
 
-function createBoss(id, levelId) {
-  const level = LEVELS.find((l) => l.id === levelId) || LEVELS[0];
-  return {
-    id,
-    type: "boss",
-    family: "boss",
-    label: "Boss caisse express",
-    icon: Trophy,
-    color: "bg-violet-100 text-violet-700 border-violet-300",
-    x: randomBetween(40, GAME_WIDTH - 120),
-    y: -110,
-    speed: 1.7 + level.fallBonus * 0.6,
-    points: 80 + level.id * 20,
-    size: 96,
-    hp: 3,
-  };
+.bad{
+    background:#ef4444;
 }
 
-function useKeyboard() {
-  const [keys, setKeys] = useState({ left: false, right: false });
-
-  useEffect(() => {
-    const onKeyDown = (e) => {
-      const key = e.key.toLowerCase();
-      if (e.key === "ArrowLeft" || key === "q" || key === "a") {
-        setKeys((k) => ({ ...k, left: true }));
-      }
-      if (e.key === "ArrowRight" || key === "d") {
-        setKeys((k) => ({ ...k, right: true }));
-      }
-    };
-
-    const onKeyUp = (e) => {
-      const key = e.key.toLowerCase();
-      if (e.key === "ArrowLeft" || key === "q" || key === "a") {
-        setKeys((k) => ({ ...k, left: false }));
-      }
-      if (e.key === "ArrowRight" || key === "d") {
-        setKeys((k) => ({ ...k, right: false }));
-      }
-    };
-
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("keyup", onKeyUp);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("keyup", onKeyUp);
-    };
-  }, []);
-
-  return keys;
+#hud{
+    width:800px;
+    margin:auto;
+    display:flex;
+    justify-content:space-between;
 }
 
-function StatPill({ icon: Icon, label, value, tone = "default" }) {
-  const toneClass =
-    tone === "warning"
-      ? "bg-amber-500/15 text-amber-200 border-amber-400/30"
-      : tone === "danger"
-        ? "bg-rose-500/15 text-rose-200 border-rose-400/30"
-        : tone === "success"
-          ? "bg-emerald-500/15 text-emerald-200 border-emerald-400/30"
-          : "bg-white/8 text-white border-white/10";
-
-  return (
-    <div className={`rounded-2xl border px-3 py-2 min-w-[110px] ${toneClass}`}>
-      <div className="flex items-center gap-2 text-xs opacity-80 mb-1">
-        <Icon className="w-3.5 h-3.5" />
-        <span>{label}</span>
-      </div>
-      <div className="text-lg font-bold leading-none">{value}</div>
-    </div>
-  );
+button{
+    padding:10px 20px;
+    border:none;
+    border-radius:6px;
+    background:#22c55e;
+    color:black;
+    font-weight:bold;
+    cursor:pointer;
 }
 
-function SideObjective({ title, done, progress, helper }) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <div className="font-semibold text-sm">{title}</div>
-        <Badge className={done ? "bg-emerald-500 text-slate-950" : "bg-slate-700 text-white"}>
-          {done ? "Validé" : "En cours"}
-        </Badge>
-      </div>
-      <Progress value={progress} className="h-2 rounded-full mb-2" />
-      <div className="text-xs text-slate-300">{helper}</div>
-    </div>
-  );
+</style>
+</head>
+
+<body>
+
+<h1>Coop Rush — Panique au Rayon</h1>
+
+<div id="hud">
+<div>Score : <span id="score">0</span></div>
+<div>Vies : <span id="lives">3</span></div>
+<div>Niveau : <span id="level">1</span></div>
+</div>
+
+<div id="game">
+<div id="player"></div>
+</div>
+
+<button onclick="startGame()">Lancer la partie</button>
+
+<script>
+
+const game = document.getElementById("game")
+const player = document.getElementById("player")
+
+let playerX = 350
+let score = 0
+let lives = 3
+let level = 1
+
+let items = []
+
+function updateHUD(){
+    document.getElementById("score").innerText = score
+    document.getElementById("lives").innerText = lives
+    document.getElementById("level").innerText = level
 }
 
-export default function PaniqueAuRayonGameSite() {
-  const [started, setStarted] = useState(false);
-  const [paused, setPaused] = useState(false);
-  const [gameOver, setGameOver] = useState(false);
-  const [victory, setVictory] = useState(false);
+function createItem(){
 
-  const [score, setScore] = useState(0);
-  const [highScore, setHighScore] = useState(0);
-  const [coins, setCoins] = useState(0);
-  const [lives, setLives] = useState(INITIAL_LIVES);
-  const [timeLeft, setTimeLeft] = useState(ROUND_TIME);
-  const [playerX, setPlayerX] = useState(GAME_WIDTH / 2 - PLAYER_WIDTH / 2);
-  const [items, setItems] = useState([]);
-  const [particles, setParticles] = useState([]);
+    const item = document.createElement("div")
 
-  const [level, setLevel] = useState(1);
-  const [combo, setCombo] = useState(0);
-  const [goodCaught, setGoodCaught] = useState(0);
-  const [safeSeconds, setSafeSeconds] = useState(0);
-  const [message, setMessage] = useState("Prépare le panier. Les rayons n’attendent personne.");
-  const [touchMode, setTouchMode] = useState(false);
-  const [bossSeen, setBossSeen] = useState(false);
+    let bad = Math.random() < 0.25
 
-  const [turbo, setTurbo] = useState(0);
-  const [shield, setShield] = useState(0);
+    item.classList.add("item")
+    item.classList.add(bad ? "bad" : "good")
 
-  const [selectedSkin, setSelectedSkin] = useState("coop");
-  const [ownedSkins, setOwnedSkins] = useState(["coop"]);
+    item.x = Math.random() * 760
+    item.y = -40
+    item.speed = 2 + level
 
-  const keys = useKeyboard();
-  const animationRef = useRef(null);
-  const spawnCounterRef = useRef(0);
-  const itemIdRef = useRef(0);
-  const lastFrameRef = useRef(0);
-  const damageCooldownRef = useRef(false);
-  const secondTimerRef = useRef(0);
-  const bossSpawnedAtLevelRef = useRef({});
+    item.style.left = item.x + "px"
+    item.style.top = item.y + "px"
 
-  const currentLevel = LEVELS.find((l) => l.id === level) || LEVELS[0];
+    game.appendChild(item)
 
-  const levelProgress = useMemo(() => {
-    const previousTarget = level === 1 ? 0 : LEVELS[level - 2].target;
-    const segment = currentLevel.target - previousTarget;
-    const raw = ((score - previousTarget) / segment) * 100;
-    return clamp(raw, 0, 100);
-  }, [score, level, currentLevel]);
+    items.push({
+        element:item,
+        bad:bad,
+        x:item.x,
+        y:item.y,
+        speed:item.speed
+    })
 
-  const timeProgress = useMemo(() => (timeLeft / ROUND_TIME) * 100, [timeLeft]);
+}
 
-  const missions = useMemo(() => {
-    return [
-      {
-        title: "Objectif score",
-        done: score >= currentLevel.target,
-        progress: Math.min((score / currentLevel.target) * 100, 100),
-        helper: `Atteindre ${currentLevel.target} pts`,
-      },
-      {
-        title: currentLevel.id <= 2 ? "Combo maîtrise" : "Stabilité sous pression",
-        done: currentLevel.id <= 2 ? combo >= (currentLevel.id === 1 ? 6 : 8) : safeSeconds >= 20,
-        progress:
-          currentLevel.id <= 2
-            ? Math.min((combo / (currentLevel.id === 1 ? 6 : 8)) * 100, 100)
-            : Math.min((safeSeconds / 20) * 100, 100),
-        helper: currentLevel.id <= 2 ? `Combo actuel : ${combo}` : `Sans erreur : ${safeSeconds}s`,
-      },
-      {
-        title: "Mission niveau",
-        done: currentLevel.id < 4 ? bossSeen : victory,
-        progress: currentLevel.id < 4 ? (bossSeen ? 100 : Math.min((score / currentLevel.bossAt) * 100, 100)) : victory ? 100 : Math.min((score / currentLevel.target) * 100, 100),
-        helper: currentLevel.id < 4 ? `Boss visible à ~${currentLevel.bossAt} pts` : "Vaincre le chaos final",
-      },
-    ];
-  }, [score, combo, safeSeconds, currentLevel, bossSeen, victory]);
+function updateItems(){
 
-  useEffect(() => {
-    const savedHigh = localStorage.getItem("coop-rush-highscore");
-    const savedCoins = localStorage.getItem("coop-rush-coins");
-    const savedSkins = localStorage.getItem("coop-rush-skins");
-    const savedSkin = localStorage.getItem("coop-rush-selected-skin");
+    items.forEach((obj,index)=>{
 
-    if (savedHigh) setHighScore(Number(savedHigh));
-    if (savedCoins) setCoins(Number(savedCoins));
-    if (savedSkins) setOwnedSkins(JSON.parse(savedSkins));
-    if (savedSkin) setSelectedSkin(savedSkin);
-  }, []);
+        obj.y += obj.speed
 
-  useEffect(() => {
-    localStorage.setItem("coop-rush-highscore", String(highScore));
-  }, [highScore]);
+        obj.element.style.top = obj.y + "px"
 
-  useEffect(() => {
-    localStorage.setItem("coop-rush-coins", String(coins));
-  }, [coins]);
+        if(obj.y > 460){
 
-  useEffect(() => {
-    localStorage.setItem("coop-rush-skins", JSON.stringify(ownedSkins));
-  }, [ownedSkins]);
-
-  useEffect(() => {
-    localStorage.setItem("coop-rush-selected-skin", selectedSkin);
-  }, [selectedSkin]);
-
-  const resetGame = () => {
-    setStarted(true);
-    setPaused(false);
-    setGameOver(false);
-    setVictory(false);
-    setScore(0);
-    setLives(INITIAL_LIVES);
-    setTimeLeft(ROUND_TIME);
-    setPlayerX(GAME_WIDTH / 2 - PLAYER_WIDTH / 2);
-    setItems([]);
-    setParticles([]);
-    setLevel(1);
-    setCombo(0);
-    setGoodCaught(0);
-    setSafeSeconds(0);
-    setMessage("Top départ. Objectif : tenir le rayon et marquer vite.");
-    setTouchMode(false);
-    setBossSeen(false);
-    setTurbo(0);
-    setShield(0);
-    spawnCounterRef.current = 0;
-    itemIdRef.current = 0;
-    lastFrameRef.current = 0;
-    secondTimerRef.current = 0;
-    bossSpawnedAtLevelRef.current = {};
-    damageCooldownRef.current = false;
-  };
-
-  const tryBuySkin = (skin) => {
-    if (ownedSkins.includes(skin.id)) {
-      setSelectedSkin(skin.id);
-      return;
-    }
-    if (coins < skin.price) {
-      setMessage("Pas assez de coins. Le service achats dit non.");
-      return;
-    }
-    setCoins((c) => c - skin.price);
-    setOwnedSkins((prev) => [...prev, skin.id]);
-    setSelectedSkin(skin.id);
-    setMessage(`Skin ${skin.name} débloqué.`);
-  };
-
-  useEffect(() => {
-    if (!started || gameOver || victory || paused) return;
-
-    const countdown = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          setGameOver(true);
-          setMessage("Temps écoulé. Le magasin ferme, la pression reste.");
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(countdown);
-  }, [started, gameOver, victory, paused]);
-
-  useEffect(() => {
-    if (!started || gameOver || victory || paused) return;
-
-    const powerTick = setInterval(() => {
-      setTurbo((prev) => Math.max(0, prev - 1));
-      setShield((prev) => Math.max(0, prev - 1));
-      setSafeSeconds((prev) => prev + 1);
-    }, 1000);
-
-    return () => clearInterval(powerTick);
-  }, [started, gameOver, victory, paused]);
-
-  useEffect(() => {
-    if (!started || gameOver || victory || paused) return;
-
-    const loop = (timestamp) => {
-      if (!lastFrameRef.current) lastFrameRef.current = timestamp;
-      const delta = timestamp - lastFrameRef.current;
-      lastFrameRef.current = timestamp;
-
-      setPlayerX((prev) => {
-        let next = prev;
-        if (keys.left) next -= PLAYER_SPEED;
-        if (keys.right) next += PLAYER_SPEED;
-        return clamp(next, 0, GAME_WIDTH - PLAYER_WIDTH);
-      });
-
-      spawnCounterRef.current += delta;
-      const spawnRate = randomInt(currentLevel.spawnMin, currentLevel.spawnMax);
-
-      if (spawnCounterRef.current > spawnRate) {
-        spawnCounterRef.current = 0;
-        setItems((prev) => [...prev, createFallingItem(itemIdRef.current++, level)]);
-      }
-
-      if (
-        score >= currentLevel.bossAt &&
-        !bossSpawnedAtLevelRef.current[level]
-      ) {
-        bossSpawnedAtLevelRef.current[level] = true;
-        setBossSeen(true);
-        setMessage(`Attention : ${currentLevel.name} déclenche le boss de caisse.`);
-        setItems((prev) => [...prev, createBoss(itemIdRef.current++, level)]);
-      }
-
-      secondTimerRef.current += delta;
-      if (secondTimerRef.current >= 1000) {
-        secondTimerRef.current = 0;
-        setParticles((prev) => prev.slice(-10));
-      }
-
-      setItems((prevItems) => {
-        const updated = [];
-        const particleBatch = [];
-
-        for (const item of prevItems) {
-          const nextY = item.y + item.speed + (turbo > 0 ? 0.15 : 0);
-          const size = item.size || ITEM_SIZE;
-          const hitsPlayer =
-            nextY + size >= GAME_HEIGHT - PLAYER_HEIGHT - 8 &&
-            nextY <= GAME_HEIGHT &&
-            item.x + size >= playerX &&
-            item.x <= playerX + PLAYER_WIDTH;
-
-          if (hitsPlayer) {
-            if (item.family === "good") {
-              const gained = turbo > 0 ? Math.round(item.points * 2) : item.points;
-              setScore((s) => s + gained);
-              setCombo((c) => c + 1);
-              setGoodCaught((g) => g + 1);
-              setCoins((c) => c + 1);
-              setMessage(`${item.label} attrapé. Flux propre, KPI heureux.`);
-              particleBatch.push(createParticle(item.x, nextY, `+${gained}`, "good"));
-            } else if (item.family === "bad") {
-              if (shield > 0) {
-                setMessage("Bouclier actif : incident neutralisé.");
-                particleBatch.push(createParticle(item.x, nextY, "Bouclier", "shield"));
-              } else {
-                setScore((s) => Math.max(0, s + item.points));
-                setCombo(0);
-                setSafeSeconds(0);
-                setLives((prev) => {
-                  const nextLives = prev - 1;
-                  if (nextLives <= 0) {
-                    setGameOver(true);
-                    setMessage("Rupture totale. Partie perdue.");
-                    return 0;
-                  }
-                  setMessage(`Alerte : ${item.label}. Une vie perdue.`);
-                  return nextLives;
-                });
-                particleBatch.push(createParticle(item.x, nextY, item.points.toString(), "bad"));
-              }
-            } else if (item.family === "powerup") {
-              if (item.type === "turbo") {
-                setTurbo(8);
-                setMessage("Turbo activé : score x2 pendant 8 secondes.");
-                particleBatch.push(createParticle(item.x, nextY, "Turbo x2", "turbo"));
-              }
-              if (item.type === "shield") {
-                setShield(10);
-                setMessage("Bouclier activé pendant 10 secondes.");
-                particleBatch.push(createParticle(item.x, nextY, "Shield", "shield"));
-              }
-            } else if (item.family === "boss") {
-              const nextHp = item.hp - 1;
-              setScore((s) => s + 25);
-              setCoins((c) => c + 3);
-              setCombo((c) => c + 1);
-              setMessage(`Boss touché. PV restants : ${nextHp}`);
-              particleBatch.push(createParticle(item.x, nextY, `Boss -1`, "boss"));
-
-              if (nextHp <= 0) {
-                setScore((s) => s + item.points);
-                setCoins((c) => c + 10);
-                particleBatch.push(createParticle(item.x, nextY, `+${item.points}`, "good"));
-                if (level < LEVELS.length) {
-                  setLevel((lv) => lv + 1);
-                  setBossSeen(false);
-                  setMessage(`Niveau ${level + 1} débloqué : ${LEVELS[level]?.name || "Final"}`);
-                } else {
-                  setVictory(true);
-                  setMessage("Victoire. Tu as survécu au chaos du magasin.");
-                }
-                continue;
-              }
-
-              updated.push({ ...item, y: nextY, hp: nextHp });
-              continue;
+            if(!obj.bad){
+                score += 5
             }
-            continue;
-          }
 
-          if (nextY > GAME_HEIGHT + 20) {
-            if (item.family === "good") {
-              setCombo(0);
-              setSafeSeconds(0);
-            }
-            if (item.family === "boss") {
-              if (!damageCooldownRef.current) {
-                damageCooldownRef.current = true;
-                setLives((prev) => Math.max(0, prev - 1));
-                setTimeout(() => {
-                  damageCooldownRef.current = false;
-                }, 300);
-                setMessage("Le boss est passé. Impact direct sur les vies.");
-              }
-            }
-            continue;
-          }
+            obj.element.remove()
+            items.splice(index,1)
 
-          updated.push({ ...item, y: nextY });
         }
 
-        if (particleBatch.length) {
-          setParticles((prev) => [...prev, ...particleBatch].slice(-18));
+        if(
+            obj.y > 440 &&
+            obj.x > playerX - 30 &&
+            obj.x < playerX + 80
+        ){
+
+            if(obj.bad){
+                lives--
+            }else{
+                score += 10
+            }
+
+            obj.element.remove()
+            items.splice(index,1)
+
         }
 
-        return updated;
-      });
+    })
 
-      animationRef.current = requestAnimationFrame(loop);
-    };
-
-    animationRef.current = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(animationRef.current);
-  }, [started, paused, gameOver, victory, keys.left, keys.right, score, level, turbo, shield, currentLevel]);
-
-  useEffect(() => {
-    if ((gameOver || victory) && score > highScore) {
-      setHighScore(score);
-    }
-  }, [gameOver, victory, score, highScore]);
-
-  const skinStyles = {
-    coop: "bg-blue-500 border-blue-300 text-white",
-    neon: "bg-fuchsia-500 border-fuchsia-300 text-white",
-    gold: "bg-amber-400 border-amber-200 text-slate-950",
-  };
-
-  const skinCatalog = [
-    { id: "coop", name: "Classic Coop", price: 0 },
-    { id: "neon", name: "Neon Rush", price: 25 },
-    { id: "gold", name: "Golden Cart", price: 55 },
-  ];
-
-  const leaderboard = [
-    { name: "RayonBoss", score: 720 },
-    { name: "CoopRunner", score: 640 },
-    { name: "IGI_Master", score: 575 },
-    { name: "Toi", score: highScore },
-  ];
-
-  const shareScore = async () => {
-    const text = `J’ai fait ${score} points sur Coop Rush – Panique au Rayon.`;
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: "Coop Rush",
-          text,
-        });
-      } catch {
-        setMessage("Partage annulé.");
-      }
-      return;
-    }
-
-    if (navigator.clipboard) {
-      await navigator.clipboard.writeText(text);
-      setMessage("Score copié dans le presse-papiers.");
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-950 text-white">
-      <div
-        className="absolute inset-0 opacity-20 bg-cover bg-center"
-        style={{ backgroundImage: `url(${ASSETS.heroBg})` }}
-      />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,255,255,0.14),_transparent_35%)]" />
-
-      <div className="relative max-w-7xl mx-auto p-5 md:p-8">
-        <div className="grid xl:grid-cols-[1.5fr_0.7fr] gap-6">
-          <div className="space-y-6">
-            <Card className="overflow-hidden rounded-[28px] border-white/10 bg-slate-900/80 backdrop-blur-xl shadow-2xl">
-              <div className="relative">
-                <div
-                  className="h-44 bg-cover bg-center"
-                  style={{ backgroundImage: `url(${ASSETS.aisleBg})` }}
-                />
-                <div className="absolute inset-0 bg-gradient-to-r from-slate-950/85 via-slate-950/55 to-transparent" />
-                <div className="absolute inset-0 p-6 md:p-8 flex flex-col justify-between">
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <Badge className="bg-blue-500 text-white rounded-full px-3 py-1">
-                      Étape 1 / Refonte premium jouable
-                    </Badge>
-                    <img
-                      src={ASSETS.coopLogo}
-                      alt="Visuel Coop"
-                      className="h-10 w-auto rounded-lg bg-white/90 px-2 py-1 shadow-lg"
-                    />
-                  </div>
-
-                  <div className="max-w-3xl">
-                    <h1 className="text-4xl md:text-6xl font-black tracking-tight mb-3">
-                      Coop Rush — Panique au Rayon
-                    </h1>
-                    <p className="text-slate-200 text-base md:text-lg max-w-2xl leading-relaxed">
-                      Une version plus lisible, plus nerveuse et plus démonstrative de ton jeu :
-                      indicateurs clairs, niveaux progressifs, boss, boutique de skins et ambiance retail plus marquée.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </Card>
-
-            <Card className="bg-slate-900/85 border-white/10 rounded-[28px] overflow-hidden shadow-2xl backdrop-blur-xl">
-              <CardContent className="p-4 md:p-6">
-                <div className="grid lg:grid-cols-[1fr_auto] gap-4 mb-5 items-start">
-                  <div className="flex flex-wrap gap-2">
-                    <StatPill icon={Trophy} label="Score" value={score} tone="success" />
-                    <StatPill icon={Star} label="Record" value={highScore} />
-                    <StatPill icon={Zap} label="Combo" value={combo} />
-                    <StatPill icon={Coins} label="Coins" value={coins} tone="warning" />
-                    <StatPill icon={Clock3} label="Temps" value={`${timeLeft}s`} tone="danger" />
-                    <StatPill icon={Target} label="Niveau" value={`${level} / ${LEVELS.length}`} />
-                  </div>
-
-                  <div className="flex items-center gap-2 flex-wrap justify-start lg:justify-end">
-                    {Array.from({ length: lives }).map((_, i) => (
-                      <Heart key={i} className="w-5 h-5 text-rose-400 fill-rose-400" />
-                    ))}
-                    {turbo > 0 && (
-                      <Badge className="bg-amber-500 text-slate-950 rounded-full px-3 py-1">
-                        Turbo x2 • {turbo}s
-                      </Badge>
-                    )}
-                    {shield > 0 && (
-                      <Badge className="bg-emerald-500 text-slate-950 rounded-full px-3 py-1">
-                        Bouclier • {shield}s
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid md:grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <div className="flex items-center justify-between text-xs text-slate-300 mb-2">
-                      <span>Progression du niveau — {currentLevel.name}</span>
-                      <span>{Math.round(levelProgress)}%</span>
-                    </div>
-                    <Progress value={levelProgress} className="h-3 rounded-full" />
-                  </div>
-                  <div>
-                    <div className="flex items-center justify-between text-xs text-slate-300 mb-2">
-                      <span>Temps de partie</span>
-                      <span>{Math.round(timeProgress)}%</span>
-                    </div>
-                    <Progress value={timeProgress} className="h-3 rounded-full" />
-                  </div>
-                </div>
-
-                <div
-                  className="relative mx-auto rounded-[30px] overflow-hidden border border-white/10"
-                  style={{ width: GAME_WIDTH, height: GAME_HEIGHT, maxWidth: "100%" }}
-                >
-                  <div
-                    className="absolute inset-0 bg-cover bg-center"
-                    style={{ backgroundImage: `url(${ASSETS.aisleBg})` }}
-                  />
-                  <div className="absolute inset-0 bg-slate-950/65" />
-                  <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(255,255,255,0.06),transparent_20%,transparent_80%,rgba(16,185,129,0.10))]" />
-
-                  <div className="absolute top-0 left-0 right-0 z-20 p-4 flex items-center justify-between gap-4 text-xs md:text-sm">
-                    <div className="rounded-full bg-black/40 border border-white/10 px-3 py-2 text-slate-200 max-w-[65%] truncate">
-                      {message}
-                    </div>
-                    <div className="rounded-full bg-black/40 border border-white/10 px-3 py-2 text-slate-200">
-                      {touchMode ? "Mode tactile / souris" : "Contrôles : ← → / Q D"}
-                    </div>
-                  </div>
-
-                  {!started && (
-                    <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm p-6">
-                      <div className="max-w-xl rounded-[28px] border border-white/10 bg-slate-900/90 p-8 text-center shadow-2xl">
-                        <div className="mx-auto mb-4 w-24 h-24 rounded-[28px] bg-blue-500/20 border border-blue-300/20 flex items-center justify-center">
-                          <ShoppingBasket className="w-12 h-12 text-blue-300" />
-                        </div>
-                        <h2 className="text-3xl md:text-4xl font-black mb-3">Prêt pour le rush ?</h2>
-                        <p className="text-slate-300 leading-relaxed mb-6">
-                          Attrape les bons produits, évite les erreurs rayon, active les bonus, bat les boss et passe les niveaux.
-                          Cette version est pensée pour une démo Crunch plus percutante et plus lisible.
-                        </p>
-                        <div className="grid sm:grid-cols-3 gap-3 text-left mb-6">
-                          <div className="rounded-2xl bg-white/5 border border-white/10 p-3">
-                            <div className="font-semibold mb-1">Objectif</div>
-                            <div className="text-sm text-slate-300">Monter en score et survivre aux 4 niveaux.</div>
-                          </div>
-                          <div className="rounded-2xl bg-white/5 border border-white/10 p-3">
-                            <div className="font-semibold mb-1">Lecture claire</div>
-                            <div className="text-sm text-slate-300">HUD net, barres, badges, objectifs visuels.</div>
-                          </div>
-                          <div className="rounded-2xl bg-white/5 border border-white/10 p-3">
-                            <div className="font-semibold mb-1">Montée en gamme</div>
-                            <div className="text-sm text-slate-300">Boss, skins, niveaux, power-ups, partage.</div>
-                          </div>
-                        </div>
-                        <Button onClick={resetGame} className="rounded-2xl px-8 py-6 text-base bg-blue-500 hover:bg-blue-400">
-                          <Play className="w-5 h-5 mr-2" /> Lancer la partie
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  {(gameOver || victory) && started && (
-                    <div className="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-6">
-                      <div className="max-w-lg rounded-[28px] border border-white/10 bg-slate-900/90 p-8 text-center shadow-2xl">
-                        <div className="mx-auto mb-4 w-24 h-24 rounded-[28px] bg-white/5 border border-white/10 flex items-center justify-center">
-                          {victory ? <CheckCircle2 className="w-12 h-12 text-emerald-400" /> : <Trophy className="w-12 h-12 text-amber-300" />}
-                        </div>
-                        <h2 className="text-3xl font-black mb-3">
-                          {victory ? "Victoire magasin" : "Partie terminée"}
-                        </h2>
-                        <p className="text-slate-300 mb-6 leading-relaxed">
-                          Score final : <span className="font-bold text-white">{score}</span><br />
-                          Record : <span className="font-bold text-white">{highScore}</span><br />
-                          Coins gagnés : <span className="font-bold text-white">{coins}</span>
-                        </p>
-                        <div className="flex flex-wrap items-center justify-center gap-3">
-                          <Button onClick={resetGame} className="rounded-2xl px-6 py-5 text-base bg-blue-500 hover:bg-blue-400">
-                            <RotateCcw className="w-5 h-5 mr-2" /> Rejouer
-                          </Button>
-                          <Button variant="secondary" onClick={shareScore} className="rounded-2xl px-6 py-5 text-base">
-                            <Sparkles className="w-5 h-5 mr-2" /> Partager le score
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <AnimatePresence>
-                    {items.map((item) => {
-                      const Icon = item.icon;
-                      const size = item.size || ITEM_SIZE;
-                      const isBoss = item.family === "boss";
-
-                      return (
-                        <motion.div
-                          key={item.id}
-                          initial={{ scale: 0.7, opacity: 0 }}
-                          animate={{ scale: 1, opacity: 1 }}
-                          exit={{ scale: 0.4, opacity: 0 }}
-                          className={`absolute rounded-2xl border shadow-2xl flex items-center justify-center ${item.color}`}
-                          style={{
-                            left: item.x,
-                            top: item.y,
-                            width: size,
-                            height: size,
-                            boxShadow: isBoss ? "0 0 30px rgba(168,85,247,0.5)" : "0 10px 25px rgba(0,0,0,0.25)",
-                          }}
-                        >
-                          <div className="flex flex-col items-center justify-center gap-1">
-                            <Icon className={isBoss ? "w-9 h-9" : "w-5 h-5"} />
-                            {isBoss && (
-                              <div className="text-[10px] font-bold">{item.hp} PV</div>
-                            )}
-                          </div>
-                        </motion.div>
-                      );
-                    })}
-                  </AnimatePresence>
-
-                  <AnimatePresence>
-                    {particles.map((particle) => (
-                      <motion.div
-                        key={particle.id}
-                        initial={{ opacity: 1, y: 0, scale: 0.9 }}
-                        animate={{ opacity: 0, y: -42, scale: 1.1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.8 }}
-                        className={`absolute text-sm font-black pointer-events-none ${
-                          particle.tone === "bad"
-                            ? "text-rose-300"
-                            : particle.tone === "shield"
-                              ? "text-emerald-300"
-                              : particle.tone === "turbo"
-                                ? "text-amber-300"
-                                : particle.tone === "boss"
-                                  ? "text-violet-300"
-                                  : "text-white"
-                        }`}
-                        style={{ left: particle.x, top: particle.y }}
-                      >
-                        {particle.text}
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-
-                  <div
-                    className="absolute inset-0 z-10"
-                    onMouseMove={(e) => {
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      const ratio = rect.width / GAME_WIDTH;
-                      const x = (e.clientX - rect.left) / ratio - PLAYER_WIDTH / 2;
-                      setPlayerX(clamp(x, 0, GAME_WIDTH - PLAYER_WIDTH));
-                      setTouchMode(true);
-                    }}
-                    onTouchMove={(e) => {
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      const ratio = rect.width / GAME_WIDTH;
-                      const x = (e.touches[0].clientX - rect.left) / ratio - PLAYER_WIDTH / 2;
-                      setPlayerX(clamp(x, 0, GAME_WIDTH - PLAYER_WIDTH));
-                      setTouchMode(true);
-                    }}
-                  />
-
-                  <motion.div
-                    animate={{ x: playerX }}
-                    transition={{ type: "tween", duration: 0.05 }}
-                    className="absolute bottom-3 left-0 z-20"
-                    style={{ width: PLAYER_WIDTH, height: PLAYER_HEIGHT }}
-                  >
-                    <div
-                      className={`w-full h-full rounded-2xl border-2 shadow-[0_0_30px_rgba(59,130,246,0.35)] flex items-center justify-center gap-2 ${skinStyles[selectedSkin]}`}
-                    >
-                      <ArrowLeft className="w-4 h-4 opacity-70" />
-                      <ShoppingBasket className="w-5 h-5" />
-                      <span className="text-xs font-bold uppercase tracking-wide">Panier</span>
-                      <ArrowRight className="w-4 h-4 opacity-70" />
-                    </div>
-                  </motion.div>
-                </div>
-
-                <div className="flex flex-wrap gap-3 mt-4">
-                  {!started ? null : (
-                    <>
-                      <Button variant="secondary" onClick={() => setPaused((p) => !p)} className="rounded-2xl">
-                        {paused ? "Reprendre" : "Pause"}
-                      </Button>
-                      <Button variant="outline" onClick={shareScore} className="rounded-2xl">
-                        Partager mon score
-                      </Button>
-                    </>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="space-y-6">
-            <Card className="bg-slate-900/85 border-white/10 rounded-[28px] backdrop-blur-xl">
-              <CardContent className="p-6 space-y-4">
-                <div>
-                  <h3 className="text-2xl font-black mb-1">Pilotage de partie</h3>
-                  <p className="text-slate-300 text-sm leading-relaxed">
-                    Indicateurs plus explicites pour que même un prof qui arrive à mi-présentation comprenne en 3 secondes ce qu’il se passe.
-                  </p>
-                </div>
-                <div className={`rounded-2xl p-4 bg-gradient-to-r ${currentLevel.accent} text-slate-950`}>
-                  <div className="text-xs uppercase font-bold opacity-80 mb-1">Niveau actuel</div>
-                  <div className="text-xl font-black">{currentLevel.name}</div>
-                  <div className="text-sm mt-2">{currentLevel.intro}</div>
-                </div>
-                <div className="grid gap-3">
-                  {missions.map((mission) => (
-                    <SideObjective
-                      key={mission.title}
-                      title={mission.title}
-                      done={mission.done}
-                      progress={mission.progress}
-                      helper={mission.helper}
-                    />
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-slate-900/85 border-white/10 rounded-[28px] backdrop-blur-xl">
-              <CardContent className="p-6 space-y-4">
-                <h3 className="text-2xl font-black">Niveaux</h3>
-                <div className="space-y-3">
-                  {LEVELS.map((lv) => (
-                    <div key={lv.id} className={`rounded-2xl border p-4 ${lv.id === level ? "border-blue-400/40 bg-blue-500/10" : "border-white/10 bg-white/5"}`}>
-                      <div className="flex items-center justify-between gap-3 mb-2">
-                        <div className="font-semibold">{lv.id}. {lv.name}</div>
-                        <Badge className={lv.id < level ? "bg-emerald-500 text-slate-950" : lv.id === level ? "bg-blue-500 text-white" : "bg-slate-700 text-white"}>
-                          {lv.id < level ? "Passé" : lv.id === level ? "Actuel" : "À venir"}
-                        </Badge>
-                      </div>
-                      <div className="text-xs text-slate-300 leading-relaxed">
-                        Score cible : {lv.target} • Boss à ~{lv.bossAt} • Mission : {lv.mission}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-slate-900/85 border-white/10 rounded-[28px] backdrop-blur-xl">
-              <CardContent className="p-6 space-y-4">
-                <h3 className="text-2xl font-black">Boutique de skins</h3>
-                <div className="grid gap-3">
-                  {skinCatalog.map((skin) => {
-                    const owned = ownedSkins.includes(skin.id);
-                    const selected = selectedSkin === skin.id;
-                    return (
-                      <div key={skin.id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                        <div className="flex items-center justify-between gap-3 mb-3">
-                          <div>
-                            <div className="font-semibold">{skin.name}</div>
-                            <div className="text-xs text-slate-300">Prix : {skin.price} coins</div>
-                          </div>
-                          <div className={`w-12 h-8 rounded-xl border-2 ${skinStyles[skin.id]}`} />
-                        </div>
-                        <Button
-                          onClick={() => tryBuySkin(skin)}
-                          variant={selected ? "secondary" : "default"}
-                          className="w-full rounded-2xl"
-                        >
-                          {selected ? "Équipé" : owned ? "Équiper" : "Acheter"}
-                        </Button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-slate-900/85 border-white/10 rounded-[28px] backdrop-blur-xl">
-              <CardContent className="p-6 space-y-4">
-                <h3 className="text-2xl font-black">Classement mockup</h3>
-                <div className="space-y-3">
-                  {leaderboard.map((entry, idx) => (
-                    <div key={entry.name} className="rounded-2xl border border-white/10 bg-white/5 p-4 flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-sm font-black">
-                          {idx + 1}
-                        </div>
-                        <div>
-                          <div className="font-semibold">{entry.name}</div>
-                          <div className="text-xs text-slate-300">Top retail runners</div>
-                        </div>
-                      </div>
-                      <div className="font-black">{entry.score}</div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
+
+function updatePlayer(){
+
+    player.style.left = playerX + "px"
+
+}
+
+function gameLoop(){
+
+    updateItems()
+    updatePlayer()
+    updateHUD()
+
+    if(score > level * 100){
+        level++
+    }
+
+    if(lives <= 0){
+        alert("Game Over ! Score : " + score)
+        location.reload()
+    }
+
+}
+
+function startGame(){
+
+    setInterval(createItem,900)
+
+    setInterval(gameLoop,30)
+
+}
+
+document.addEventListener("keydown",(e)=>{
+
+    if(e.key==="ArrowLeft"){
+        playerX -= 20
+    }
+
+    if(e.key==="ArrowRight"){
+        playerX += 20
+    }
+
+    if(playerX < 0) playerX = 0
+    if(playerX > 700) playerX = 700
+
+})
+
+</script>
+
+</body>
+</html>
