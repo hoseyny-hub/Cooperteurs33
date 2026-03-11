@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Cooperateur Game</title>
+
+<style>
+
+body{
+font-family:Arial;
+background:#111;
+color:white;
+text-align:center;
+}
+
+canvas{
+background:#222;
+margin-top:30px;
+}
+
+</style>
+</head>
+
+<body>
+
+<h1>Cooperateur Game</h1>
+<p>Attrape les produits et évite les pièges</p>
+
+<canvas id="game" width="600" height="400"></canvas>
+
+<script>
+
+let canvas=document.getElementById("game");
+let ctx=canvas.getContext("2d");
+
+let basket={x:250,y:360,w:100,h:20};
+let items=[];
+let score=0;
+
+function spawn(){
+items.push({
+x:Math.random()*560,
+y:0,
+type:Math.random()<0.8?"good":"bad"
+});
+}
+
+function draw(){
+
+ctx.clearRect(0,0,600,400);
+
+ctx.fillStyle="green";
+ctx.fillRect(basket.x,basket.y,basket.w,basket.h);
+
+items.forEach(i=>{
+
+i.y+=3;
+
+ctx.fillStyle=i.type=="good"?"yellow":"red";
+ctx.fillRect(i.x,i.y,20,20);
+
+if(i.y>350 && i.x>basket.x && i.x<basket.x+100){
+
+if(i.type=="good") score+=10;
+else score-=10;
+
+i.y=500;
+
+}
+
+});
+
+ctx.fillStyle="white";
+ctx.fillText("Score: "+score,10,20);
+
+requestAnimationFrame(draw);
+
+}
+
+document.addEventListener("mousemove",(e)=>{
+basket.x=e.clientX-50;
+});
+
+setInterval(spawn,1000);
+
+draw();
+
+</script>
+
+</body>
+</html>
